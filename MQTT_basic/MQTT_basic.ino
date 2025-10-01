@@ -1,26 +1,47 @@
 #include <WiFi.h>
+#include <PubSubClient.h>
 
-const String SSID = "iPhone Uber";
-const String PSWD = "uber2307";
+const String SSID = "iPhone";
+const String PSWD = "iot_sul_123";
 
-void scanLocalNetworks();
-void conectarWiFi();
+const String brokenUrl = "test.mosquitto.org"; // URL do broker
+const int port = 1883;                         // Porta do broker
+
+WiFiClient espClient;                          
+PubSubClient mqttClient(espClient);            
+
+void connectToWiFi();
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(115200);       
+  connectToWiFi();
 
-  scanLocalNetworks();        
-  conectarWiFi();           
+  // Garante que está conectado antes de seguir
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(100);
+  }
+
+  Serial.println("Conectando ao broker");   
+  mqttClient.setServer(brokenUrl.c_str(), port);
+
+  // Conecta com o ID diretamente como string literal
+  mqttClient.connect("ESP-Arthur");  
+
+  while (!mqttClient.connected()) {
+    Serial.println("Erro de conexão ao broker...");
+    delay(500);
+  }
+
+  Serial.println(" Conectado com sucesso ao broker!");
 }
 
 void loop() {
-
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println(" Conexão perdida! Tentando reconectar...");
-    conectarWiFi();
+    Serial.println(" Conexão Wi-Fi perdida! Tentando reconectar...");
+    connectToWiFi();
   }
 
-  delay(3000); 
+  mqttClient.loop();
 }
 
 void scanLocalNetworks() {
@@ -37,7 +58,7 @@ void scanLocalNetworks() {
   }
 }
 
-void conectarWiFi() {
+void connectToWiFi() {
   Serial.print("Iniciando conexão com a rede Wi-Fi: ");
   Serial.println(SSID);
 
@@ -48,8 +69,7 @@ void conectarWiFi() {
     delay(300);
   }
 
-  Serial.println("\n Conectado com sucesso!");
+  Serial.println("\n Wi-Fi conectado com sucesso!");
   Serial.print("Endereço IP: ");
   Serial.println(WiFi.localIP());
 }
-

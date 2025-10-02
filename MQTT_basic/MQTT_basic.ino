@@ -15,18 +15,11 @@ void connectToWiFi();
 void setup() {
   Serial.begin(115200);       
   connectToWiFi();
-
-  // Garante que está conectado antes de seguir
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-  }
-
   Serial.println("Conectando ao broker");   
   mqttClient.setServer(brokenUrl.c_str(), port);
-
-  // Conecta com o ID diretamente como string literal
-  mqttClient.connect("ESP-Arthur");  
-
+  String userId = "ESP-Arthur";
+  userId += String(random(0xffff), HEX);
+  mqttClient.connect(userId.c_str()); 
   while (!mqttClient.connected()) {
     Serial.println("Erro de conexão ao broker...");
     delay(500);

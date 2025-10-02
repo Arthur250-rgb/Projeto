@@ -4,35 +4,34 @@
 const String SSID = "iPhone";
 const String PSWD = "iot_sul_123";
 
-const String brokenUrl = "test.mosquitto.org"; // URL do broker
-const int port = 1883;                         // Porta do broker
+const String brokenUrl = "test.mosquitto.org";
+const int port = 1883;
 
 WiFiClient espClient;                          
 PubSubClient mqttClient(espClient);            
 
 void connectToWiFi();
+void connectToBroker();
 
 void setup() {
   Serial.begin(115200);       
   connectToWiFi();
-  Serial.println("Conectando ao broker");   
   mqttClient.setServer(brokenUrl.c_str(), port);
-  String userId = "ESP-Arthur";
-  userId += String(random(0xffff), HEX);
-  mqttClient.connect(userId.c_str()); 
-  while (!mqttClient.connected()) {
-    Serial.println("Erro de conexão ao broker...");
-    delay(500);
-  }
-
-  Serial.println(" Conectado com sucesso ao broker!");
+  connectToBroker(); 
 }
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
-    Serial.println(" Conexão Wi-Fi perdida! Tentando reconectar...");
+    Serial.println("Conexão Wi-Fi perdida! Tentando reconectar...");
     connectToWiFi();
   }
+
+  if (!mqttClient.connected()) {
+    Serial.println("Conexão com broker perdida! Tentando reconectar...");
+    connectToBroker();
+  }
+    mqttClient.publish("AulaIoTSul/Chat", "oi-Arthur");
+    delay(1000);
 
   mqttClient.loop();
 }
@@ -62,7 +61,23 @@ void connectToWiFi() {
     delay(300);
   }
 
-  Serial.println("\n Wi-Fi conectado com sucesso!");
+  Serial.println("\nWi-Fi conectado com sucesso!");
   Serial.print("Endereço IP: ");
   Serial.println(WiFi.localIP());
+}
+
+void connectToBroker() {
+  Serial.println("Conectando ao broker");   
+
+  String userId = "ESP-Arthur";
+  userId += String(random(0xffff), HEX);
+
+  while (!mqttClient.connected()) {
+    if (mqttClient.connect(userId.c_str())) {
+      Serial.println("Conectado com sucesso ao broker!");
+    } else {
+      Serial.println("Erro de conexão ao broker... tentando novamente em 3s");
+      delay(3000);
+    }
+  }
 }

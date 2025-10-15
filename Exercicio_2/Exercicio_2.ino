@@ -4,96 +4,97 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <ArduinoJson.h>
+#include <ESP32Servo.h>
 
 JsonDocument doc;
 
-
-const String SSID = "iPhone";
-const String PSWD = "123456789";
+const String SSID = "A55 de Isaque";
+const String PSWD = "12345678";
 
 const String brokerUrl = "test.mosquitto.org";
 const int port = 1883;
+const char* TOPICO_SUBSCRIBE = "osguri/servo/comando";
 
-
+//OLED//
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
-#define I2C_SDA 5
-#define I2C_SCK 6
+#define I2C_SDA 8
+#define I2C_SCL 10
 
+//servo//
+#define SERVO_PIN 5
+Servo meuServo;
+int anguloAtual = 61;
 
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 Adafruit_SSD1306 tela(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 
-void mostrarNaTela(int distancia, bool movimento, int limiar) {
+void mostrarNaTela(byte angulo) {
   tela.clearDisplay();
-  tela.setTextSize(1);
+  tela.setTextSize(2);
   tela.setTextColor(SSD1306_WHITE);
-  tela.setCursor(0, 0);
-  tela.println("Dados Recebidos");
-  tela.println("----------------");
-  tela.setTextSize(1);
-  tela.print("Distancia: ");
-  tela.println(distancia);
-  tela.print("Status: ");
-  tela.println(movimento);
-  tela.print("Limiar: ");
-  tela.println(limiar);
+  tela.setCursor(0, 10);
+  tela.println("Servo em:");
+  tela.setTextSize(3);
+  tela.setCursor(20, 35);
+  tela.print(angulo);
+  tela.println("°");
   tela.display();
-  Serial.println(">>> Dados exibidos no display");
+  meuServo.write(angulo);
 }
-
 
 void callback(char* topic, byte* payload, unsigned long length) {
   String mensagem = "";
-  for (int i = 0; i < length; i++) mensagem += (char)payload[i];
+  for (int i = 0; i < length; i++)
+    mensagem += (char)payload[i];
 
-  Serial.print("Mensagem recebida do MQTT: ");
+  Serial.print("Mensagem recebida: ");
   Serial.println(mensagem);
 
-  DeserializationError error = deserializeJson(doc, mensagem);
-  if (!error) {
-    int distancia = doc["distancia"];
-    bool movimento = doc["movimento"];
-    int limiar = doc["val_pot"];
-
-    Serial.println(distancia);
-    Serial.println(movimento);
-    Serial.println(limiar);
-    // Serial.println("Movimento: " + (char)movimento);
-    // Serial.println("Limiar: " + (char)limiar);
-
-    mostrarNaTela(distancia, movimento, limiar);
+  DeserializationError erro = deserializeJson(doc, mensagem);
+  if (!erro){
+    byte angulo = doc["val_pot"];
+    Serial.println(angulo);
+    mostrarNaTela(angulo);
   }
+
+
+  // if (doc.containsKey("angulo")) {
+  //   int novoAngulo = doc["angulo"];
+  //   novoAngulo = constrain(novoAngulo, 0, 180);
+  //   meuServo.write(novoAngulo);
+  //   anguloAtual = novoAngulo;
+  //   Serial.printf("Servo movido para %d graus\n", novoAngulo);
+  //   mostrarNaTela(anguloAtual);
+  // }
 }
 
-
-void conexaoBroker() {
+void conectarBroker() {
   mqttClient.setServer(brokerUrl.c_str(), port);
   mqttClient.setCallback(callback);
 
   Serial.print("Conectando ao broker MQTT...");
   while (!mqttClient.connected()) {
-    if (mqttClient.connect("MonitorCentral")) {
+    if (mqttClient.connect("ControladorServo")) {
       Serial.println(" Conectado!");
+      mqttClient.subscribe(TOPICO_SUBSCRIBE);
+      Serial.print("Inscrito no tópico: ");
+      Serial.println(TOPICO_SUBSCRIBE);
     } else {
       Serial.print(".");
       delay(2000);
     }
   }
-
-  mqttClient.subscribe("osguri/estacao/dados");
-  Serial.println("Inscrito no tópico: osguri/estacao/dados");
 }
 
-
-void conexaoWifi() {
+void conectarWiFi() {
   Serial.println("Conectando ao Wi-Fi...");
   WiFi.begin(SSID, PSWD);
 
   int tentativas = 0;
-  while (WiFi.status() != WL_CONNECTED && tentativas < 50) {
+  while (WiFi.status() != WL_CONNECTED && tentativas < 30) {
     delay(500);
     Serial.print(".");
     tentativas++;
@@ -108,38 +109,40 @@ void conexaoWifi() {
   }
 }
 
-
 void setup() {
   Serial.begin(115200);
-  Wire.begin(I2C_SDA, I2C_SCK);
+  Wire.begin(I2C_SDA, I2C_SCL);
+
+  meuServo.attach(SERVO_PIN);
+  meuServo.write(anguloAtual);
 
   if (!tela.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println("Falha ao inicializar o display OLED!");
-    while (true)
-      ;
+    Serial.println("Falha ao inicializar o display!");
+    while (true);
   }
 
   tela.clearDisplay();
   tela.setTextSize(1);
   tela.setTextColor(SSD1306_WHITE);
   tela.setCursor(10, 25);
-  tela.println("Conectando...");
+  tela.println("Conectando Wi-Fi...");
   tela.display();
 
-  conexaoWifi();
-  conexaoBroker();
-}
+  conectarWiFi();
+  conectarBroker();
 
+  mostrarNaTela(anguloAtual);
+}
 
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("Wi-Fi desconectado. Tentando reconectar...");
-    conexaoWifi();
+    conectarWiFi();
   }
 
   if (!mqttClient.connected()) {
     Serial.println("MQTT desconectado. Tentando reconectar...");
-    conexaoBroker();
+    conectarBroker();
   }
 
   mqttClient.loop();
